@@ -158,6 +158,29 @@ impl Gossipsub {
                     event: event.clone(),
                 });
             }
+        } else {
+            for (peer_id, _) in self.peer_topics.iter() {
+                let mut fixed_event = None; // initialise the event once if needed
+                if fixed_event.is_none() {
+                    fixed_event = Some(Arc::new(GossipsubRpc {
+                        messages: Vec::new(),
+                        subscriptions: vec![GossipsubSubscription {
+                            topic_hash: topic_hash.clone(),
+                            action: GossipsubSubscriptionAction::Subscribe,
+                        }],
+                        control_msgs: Vec::new(),
+                    }));
+                }
+
+                let event = fixed_event.expect("event has been initialised");
+
+                debug!("Sending SUBSCRIBE to peer: {:?}", peer_id);
+                self.events.push_back(NetworkBehaviourAction::NotifyHandler {
+                    peer_id: peer_id.clone(),
+                    handler: NotifyHandler::Any,
+                    event: event.clone(),
+                });
+            }
         }
 
         // call JOIN(topic)
@@ -771,7 +794,7 @@ impl Gossipsub {
                     }
                 }
             }
-            peers.retain(|peer| to_remove_peers.contains(&peer));
+            peers.retain(|peer| !to_remove_peers.contains(&peer));
 
             // not enough peers
             if peers.len() < self.config.mesh_n {
