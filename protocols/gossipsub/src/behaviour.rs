@@ -1018,6 +1018,18 @@ impl Gossipsub {
             });
         }
     }
+
+    pub fn get_mesh_peers(&self, topic: &TopicHash) -> Vec<PeerId> {
+        self.mesh.get(&topic).map(|peers| peers.clone()).unwrap_or(vec![])
+    }
+
+    pub fn get_topic_peers(&self, topic: &TopicHash) -> Vec<PeerId> {
+        self.topic_peers.get(&topic).map(|peers| peers.clone()).unwrap_or(vec![])
+    }
+
+    pub fn get_num_peers(&self) -> usize {
+        self.peer_topics.len()
+    }
 }
 
 impl NetworkBehaviour for Gossipsub {
