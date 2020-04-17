@@ -954,6 +954,35 @@ impl Gossipsub {
         debug!("Completed forwarding message");
     }
 
+    pub fn send_messages_to_peers(
+        &mut self,
+        messages: impl IntoIterator<Item = (String, impl Into<Vec<u8>>)>,
+        recipient_peers: impl IntoIterator<Item = PeerId>
+    ) {
+        let messages = messages.into_iter().map(|(topic, data)| GossipsubMessage {
+            source: self.local_peer_id.clone(),
+            data: data.into(),
+            // To be interoperable with the go-implementation this is treated as a 64-bit
+            // big-endian uint.
+            sequence_number: rand::random(),
+            topics: vec![TopicHash::from_raw(topic)],
+        }).collect();
+        let event = Arc::new(GossipsubRpc {
+            subscriptions: Vec::new(),
+            messages,
+            control_msgs: Vec::new(),
+        });
+
+        for peer in recipient_peers {
+            debug!("Sending messages: {:?} to peer {:?}", event.messages, peer);
+            self.events.push_back(NetworkBehaviourAction::NotifyHandler {
+                peer_id: peer.clone(),
+                event: event.clone(),
+                handler: NotifyHandler::Any,
+            });
+        }
+    }
+
     /// Helper function to get a set of `n` random gossipsub peers for a `topic_hash`
     /// filtered by the function `f`.
     fn get_random_peers(
@@ -1123,6 +1152,9 @@ impl NetworkBehaviour for Gossipsub {
         // remove peer from peer_topics
         let was_in = self.peer_topics.remove(id);
         debug_assert!(was_in.is_some());
+        self.events.push_back(NetworkBehaviourAction::GenerateEvent(
+            GossipsubEvent::PeerDisconnected(id.clone()),
+        ));
     }
 
     fn inject_event(&mut self, propagation_source: PeerId, _: ConnectionId, event: GossipsubRpc) {
@@ -1250,4 +1282,7 @@ pub enum GossipsubEvent {
         /// The topic it has subscribed from.
         topic: TopicHash,
     },
+
+    /// Peer disconnected.
+    PeerDisconnected(PeerId),
 }
